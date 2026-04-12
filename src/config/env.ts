@@ -25,8 +25,15 @@ export type AppConfig = {
 };
 
 function parseMode(raw: string | undefined): MarketFeedMode {
-  const v = (raw ?? "live").toLowerCase();
-  return v === "simulate" ? "simulate" : "live";
+  const v = (raw ?? "live").trim().toLowerCase();
+  if (v === "" || v === "live") {
+    return "live";
+  }
+  // Common aliases so simulate mode is picked up even with short env values
+  if (["simulate", "sim", "mock", "dev"].includes(v)) {
+    return "simulate";
+  }
+  return "live";
 }
 
 function parseSimSymbols(raw: string | undefined): string[] {
