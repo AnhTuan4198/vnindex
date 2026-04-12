@@ -1,11 +1,13 @@
 export type FastConnectPayload = Record<string, unknown>;
 
+export type NormalizedEventSource = "ssi-fastconnect" | "ssi-fastconnect-sim";
+
 export type NormalizedEvent = {
   symbol: string;
   price: number;
   ts: string;
   seq: number;
-  source: "ssi-fastconnect";
+  source: NormalizedEventSource;
   isHeartbeat: boolean;
   marketStatus: string;
   channel: string;

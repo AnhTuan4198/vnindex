@@ -5,11 +5,12 @@ import { RedisPublisher } from "./core/redisPublisher.js";
 import { EventNormalizer } from "./socket/normalizer.js";
 import { FastconnectClient } from "./socket/fastconnectClient.js";
 import { HeartbeatScheduler } from "./socket/heartbeat.js";
+import { SimulatedFeed } from "./socket/simulatedFeed.js";
 
 async function bootstrap(): Promise<void> {
   const config = loadConfig();
   const state = new RuntimeStateStore();
-  const normalizer = new EventNormalizer();
+  const normalizer = new EventNormalizer(config.eventSource);
   const publisher = new RedisPublisher({
     host: config.redisHost,
     port: config.redisPort,
@@ -23,6 +24,7 @@ async function bootstrap(): Promise<void> {
     publisher,
     normalizer
   });
+  const simulatedFeed = new SimulatedFeed(config, state, publisher, normalizer);
   const heartbeat = new HeartbeatScheduler({
     intervalMs: config.heartbeatIntervalMs,
     publisher,
@@ -30,14 +32,22 @@ async function bootstrap(): Promise<void> {
   });
   const api = await createApiServer({ state, publisher });
 
-  socketClient.start();
+  if (config.mode === "simulate") {
+    simulatedFeed.start();
+  } else {
+    socketClient.start();
+  }
   heartbeat.start();
   await api.listen({ port: config.apiPort, host: "0.0.0.0" });
   console.log(`[market-feed] API listening on port ${config.apiPort}`);
 
   const shutdown = async () => {
     heartbeat.stop();
-    await socketClient.stop();
+    if (config.mode === "simulate") {
+      simulatedFeed.stop();
+    } else {
+      await socketClient.stop();
+    }
     await api.close();
     await publisher.close();
     process.exit(0);

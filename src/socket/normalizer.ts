@@ -1,7 +1,13 @@
-import type { FastConnectPayload, NormalizedEvent } from "../core/types.js";
+import type {
+  FastConnectPayload,
+  NormalizedEvent,
+  NormalizedEventSource
+} from "../core/types.js";
 
 export class EventNormalizer {
   private seq = 0;
+
+  constructor(private readonly eventSource: NormalizedEventSource = "ssi-fastconnect") {}
 
   nextDelta(payload: FastConnectPayload): NormalizedEvent | null {
     const channel = String(payload.Rtype ?? payload.channel ?? "X");
@@ -22,7 +28,7 @@ export class EventNormalizer {
       price,
       ts: new Date().toISOString(),
       seq: this.seq,
-      source: "ssi-fastconnect",
+      source: this.eventSource,
       isHeartbeat: false,
       marketStatus: String(payload.TradingSession ?? payload.marketStatus ?? "UNKNOWN"),
       channel
@@ -36,7 +42,7 @@ export class EventNormalizer {
       price: 0,
       ts: new Date().toISOString(),
       seq: this.seq,
-      source: "ssi-fastconnect",
+      source: this.eventSource,
       isHeartbeat: true,
       marketStatus: "LIVE",
       channel: "HEARTBEAT"
