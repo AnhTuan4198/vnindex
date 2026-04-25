@@ -2,10 +2,67 @@ import type { NormalizedEventSource } from "../core/types.js";
 
 export type MarketFeedMode = "live" | "simulate";
 
+const DEFAULT_SIGNALR_CHANNEL_SPEC: Record<string, string> = {
+  X: "X-QUOTE:ALL",
+  R: "R-QUOTE:ALL",
+  MI: "MI-INDEX:ALL",
+  F: "F-QUOTE:ALL",
+  B: "B-QUOTE:ALL"
+};
+
+function resolveSignalRBases(wsUrlRaw: string | undefined): { wss: string; https: string } {
+  const trimmed = (wsUrlRaw ?? "wss://fc-datahub.ssi.com.vn/v2.0").trim().replace(/\/+$/, "");
+  const withSignalr = trimmed.toLowerCase().includes("/signalr")
+    ? trimmed
+    : `${trimmed}/signalr`;
+  const wss = withSignalr.startsWith("wss://")
+    ? withSignalr
+    : withSignalr.replace(/^https:\/\//i, "wss://");
+  const https = wss.replace(/^wss:\/\//i, "https://");
+  return { wss, https };
+}
+
+function toSignalrChannelSpec(token: string): string {
+  const t = token.trim();
+  if (t === "") {
+    return t;
+  }
+  if (t.includes(":")) {
+    return t;
+  }
+  const key = t.toUpperCase();
+  return DEFAULT_SIGNALR_CHANNEL_SPEC[key] ?? `${key}-QUOTE:ALL`;
+}
+
+function resolveSignalrChannelSpecs(): string[] {
+  const override = process.env.FASTCONNECT_SIGNALR_CHANNELS?.trim();
+  if (override) {
+    return override
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean);
+  }
+  return (process.env.FASTCONNECT_CHANNELS ?? "X,R,MI,F,B")
+    .split(",")
+    .map((v) => v.trim())
+    .filter(Boolean)
+    .map(toSignalrChannelSpec);
+}
+
 export type AppConfig = {
   mode: MarketFeedMode;
   eventSource: NormalizedEventSource;
+  /** Legacy display / logging; SignalR uses `signalRWssBase`. */
   wsUrl: string;
+  signalRWssBase: string;
+  signalRHttpsBase: string;
+  fastconnectApiBaseUrl: string;
+  consumerId: string;
+  consumerSecret: string;
+  signalrChannelSpecs: string[];
+  tokenRefreshLeadMs: number;
+  httpRequestTimeoutMs: number;
+  accessTokenDefaultTtlSec: number;
   redisHost: string;
   redisPort: number;
   redisPassword: string;
@@ -82,10 +139,39 @@ export function loadConfig(): AppConfig {
   const eventSource: NormalizedEventSource =
     mode === "simulate" ? "ssi-fastconnect-sim" : "ssi-fastconnect";
 
+  const wsUrl = process.env.FASTCONNECT_WS_URL ?? "wss://fc-datahub.ssi.com.vn/v2.0";
+  const { wss: signalRWssBase, https: signalRHttpsBase } = resolveSignalRBases(wsUrl);
+  const fastconnectApiBaseUrl = (
+    process.env.FASTCONNECT_API_URL ?? "https://fc-data.ssi.com.vn"
+  ).replace(/\/+$/, "");
+  const consumerId = (process.env.CONSUMER_ID ?? "").trim();
+  const consumerSecret = (process.env.CONSUMER_SECRET ?? "").trim();
+  const signalrChannelSpecs = resolveSignalrChannelSpecs();
+
+  if (mode === "live") {
+    if (!consumerId || !consumerSecret) {
+      throw new Error(
+        "MARKET_FEED_MODE=live requires CONSUMER_ID and CONSUMER_SECRET for SSI AccessToken + SignalR"
+      );
+    }
+    if (signalrChannelSpecs.length === 0) {
+      throw new Error("At least one SignalR channel is required (FASTCONNECT_CHANNELS or FASTCONNECT_SIGNALR_CHANNELS)");
+    }
+  }
+
   return {
     mode,
     eventSource,
-    wsUrl: process.env.FASTCONNECT_WS_URL ?? "wss://fc-datahub.ssi.com.vn/v2.0",
+    wsUrl,
+    signalRWssBase,
+    signalRHttpsBase,
+    fastconnectApiBaseUrl,
+    consumerId,
+    consumerSecret,
+    signalrChannelSpecs,
+    tokenRefreshLeadMs: Number(process.env.FASTCONNECT_TOKEN_REFRESH_LEAD_MS ?? 300_000),
+    httpRequestTimeoutMs: Number(process.env.FASTCONNECT_HTTP_TIMEOUT_MS ?? 15_000),
+    accessTokenDefaultTtlSec: Number(process.env.FASTCONNECT_TOKEN_DEFAULT_TTL_SEC ?? 28_800),
     redisHost: process.env.REDIS_HOST ?? "localhost",
     redisPort: Number(process.env.REDIS_PORT ?? 6379),
     redisPassword: process.env.REDIS_PASSWORD ?? "",

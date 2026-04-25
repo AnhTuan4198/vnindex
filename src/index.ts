@@ -9,6 +9,7 @@ import { EventNormalizer } from "./socket/normalizer.js";
 import { FastconnectClient } from "./socket/fastconnectClient.js";
 import { HeartbeatScheduler } from "./socket/heartbeat.js";
 import { SimulatedFeed } from "./socket/simulatedFeed.js";
+import { FastconnectRestClient } from "./api/fastconnectRestClient.js";
 
 // Load .env from the market-feed package root (not process.cwd()), so `npm run dev`
 // works when the shell cwd is the monorepo root.
@@ -32,7 +33,8 @@ async function bootstrap(): Promise<void> {
     publisher,
     normalizer
   });
-  const api = await createApiServer({ state, publisher });
+  const fastconnectRestClient = new FastconnectRestClient(config);
+  const api = await createApiServer({ state, publisher, fastconnectRestClient });
 
   console.log(
     `[market-feed] mode=${config.mode} (MARKET_FEED_MODE=${process.env.MARKET_FEED_MODE ?? "<unset>"})`
