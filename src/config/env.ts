@@ -22,6 +22,10 @@ export type AppConfig = {
   simPriceStep: number;
   /** simulate: optional "SYM:base,SYM2:base2" base prices; missing symbols use a deterministic hash */
   simBasePrices: Map<string, number>;
+  /** simulate: baseline volume used for RType B mock bars */
+  simVolumeBase: number;
+  /** simulate: incremental volume delta used for RType B mock bars */
+  simVolumeStep: number;
 };
 
 function parseMode(raw: string | undefined): MarketFeedMode {
@@ -93,7 +97,9 @@ export function loadConfig(): AppConfig {
     simSymbols,
     simTickIntervalMs: Number(process.env.SIM_TICK_INTERVAL_MS ?? 500),
     simPriceStep: Number(process.env.SIM_PRICE_STEP ?? 0.05),
-    simBasePrices
+    simBasePrices,
+    simVolumeBase: Number(process.env.SIM_VOLUME_BASE ?? 5000),
+    simVolumeStep: Number(process.env.SIM_VOLUME_STEP ?? 250)
   };
 }
 

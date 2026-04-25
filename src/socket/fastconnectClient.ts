@@ -52,6 +52,11 @@ export class FastconnectClient {
       this.state.markMessageReceived();
       try {
         const payload = JSON.parse(raw.toString()) as FastConnectPayload;
+        const foreignEvent = this.normalizer.nextForeignTransaction(payload);
+        if (foreignEvent) {
+          await this.publisher.publishForeignTransaction(foreignEvent);
+          return;
+        }
         const event = this.normalizer.nextDelta(payload);
         if (!event) {
           return;

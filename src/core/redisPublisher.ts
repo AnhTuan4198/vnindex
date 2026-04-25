@@ -1,8 +1,9 @@
 import { Redis } from "ioredis";
-import type { NormalizedEvent } from "./types.js";
+import type { ForeignTransactionSnapshot, NormalizedEvent } from "./types.js";
 import { RuntimeStateStore } from "./runtimeState.js";
 
 const LAST_SEEN_KEY = "price:health:last_seen";
+const FOREIGN_PENDING_SET_KEY = "foreign:txn:pending";
 
 export class RedisPublisher {
   private redis: Redis;
@@ -27,6 +28,20 @@ export class RedisPublisher {
     try {
       await this.redis.set(`price:snapshot:${event.symbol}`, payload);
       await this.redis.publish(`price:delta:${event.symbol}`, payload);
+      await this.redis.set(LAST_SEEN_KEY, new Date().toISOString());
+      this.state.incrementPublished();
+    } catch (error) {
+      this.state.incrementPublishError();
+      throw error;
+    }
+  }
+
+  async publishForeignTransaction(event: ForeignTransactionSnapshot): Promise<void> {
+    const payload = JSON.stringify(event);
+    try {
+      await this.redis.set(`foreign:txn:snapshot:${event.symbol}`, payload);
+      await this.redis.sadd(FOREIGN_PENDING_SET_KEY, event.symbol);
+      await this.redis.publish(`foreign:txn:delta:${event.symbol}`, payload);
       await this.redis.set(LAST_SEEN_KEY, new Date().toISOString());
       this.state.incrementPublished();
     } catch (error) {
